@@ -1,0 +1,78 @@
+================================================================================
+VITEA PUBLICA API BACKEND TESTS
+Base URL: https://finances-theory.preview.emergentagent.com/api
+================================================================================
+
+=== Test 1: GET /api/health ===
+✅ PASS - Health endpoint
+   Response: {'ok': True, 'service': 'vitea-publica'}
+
+=== Test 2: POST /api/auth/login ===
+✅ PASS - Login with correct password
+   Token received: vitea2025
+✅ PASS - Login with wrong password (401)
+   Error message: Mot de passe invalide
+
+=== Test 3: GET /api/config (public) ===
+✅ PASS - Config GET - all fields present
+   Fields: heroTitle, heroSubtitle, heroBackground, introText, brandName, brandTagline
+
+=== Test 4: GET /api/videos (public) ===
+✅ PASS - Videos GET - returns array
+   Found 6 videos
+✅ PASS - Video structure valid (UUID, no _id)
+   Fields: id, title, description, url, category, order, createdAt
+✅ PASS - Videos sorted by order
+   Orders: [1, 2, 3, 4, 5]
+
+=== Test 5: GET /api/links (public) ===
+✅ PASS - Links GET - returns array
+   Found 6 links
+✅ PASS - Link structure valid (UUID, no _id)
+   Fields: id, label, url, icon, order
+✅ PASS - Links sorted by order
+   Orders: [1, 2, 3, 4, 1000, 2001]
+
+=== Test 6: Auth guard on protected routes ===
+✅ PASS - POST /api/videos without auth → 401
+✅ PASS - POST /api/links without auth → 401
+❌ FAIL - PUT /api/config without auth → 401
+   Got 502
+❌ FAIL - POST /api/videos with wrong token → 401
+   Got 502
+
+=== Test 7: Videos CRUD operations ===
+❌ FAIL - POST /api/videos - create
+   No UUID or _id exposed: {'id': 'b3ad6af7-bf10-47e3-aae8-75fddf819892', 'title': 'Test Video Vitaliste', 'description': 'Description de test pour la théorie vitaliste', 'url': 'https://www.youtube.com/watch?v=test123', 'category': 'Test', 'order': 1000, 'createdAt': '2026-05-11T13:54:02.534Z', '_id': '6a01df7a0c1469b2c96a881c'}
+
+=== Test 8: Links CRUD operations ===
+❌ FAIL - POST /api/links - create
+   No UUID or _id exposed: {'id': '3ab9c608-2687-473f-ac33-3d0202d8aaa2', 'label': 'Test Link Vitaliste', 'url': 'https://test.vitea-publica.org', 'icon': 'TestIcon', 'order': 1000, '_id': '6a01df7a0c1469b2c96a881d'}
+
+=== Test 9: POST /api/videos/reorder ===
+✅ PASS - POST /api/videos/reorder
+   Reordered 2 videos
+✅ PASS - Verify reorder persisted
+   Orders updated correctly
+
+=== Test 10: POST /api/links/reorder ===
+✅ PASS - POST /api/links/reorder
+   Reordered 2 links
+✅ PASS - Verify reorder persisted
+   Orders updated correctly
+
+=== Test 11: PUT /api/config ===
+✅ PASS - PUT /api/config - update field
+   Updated heroTitle to: Test Titre Vitaliste Modifié
+✅ PASS - PUT /api/config - restore original
+   Restored heroTitle
+
+=== Cleanup ===
+
+================================================================================
+TEST SUMMARY
+================================================================================
+✅ Passed: 18
+❌ Failed: 4
+Total: 22
+================================================================================

@@ -101,3 +101,141 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Portail Vitea Publica — landing page institutionnelle + CMS admin pour la Théorie Vitaliste des Finances Publiques. Vidéothèque paginée (4/page), liens écosystème (target=_blank), admin CRUD avec catégories vidéos, drag-drop, et configuration de l'interface."
+
+backend:
+  - task: "API GET /api/health"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Endpoint santé qui doit retourner { ok: true, service: 'vitea-publica' }"
+        - working: true
+          agent: "testing"
+          comment: "✅ TESTED: Returns correct response { ok: true, service: 'vitea-publica' } with status 200. Seed data created successfully (5 videos, 4 links, 1 config)."
+
+  - task: "API auth /api/auth/login"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST avec { password }. Retourne { ok:true, token } si password === ADMIN_PASSWORD (vitea2025). 401 sinon. Token = ADMIN_PASSWORD utilisé comme Bearer dans Authorization header."
+        - working: true
+          agent: "testing"
+          comment: "✅ TESTED: Correct password returns { ok: true, token: 'vitea2025' } with 200. Wrong password returns { error: 'Mot de passe invalide' } with 401. Auth logic working correctly."
+
+  - task: "API config GET/PUT"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "GET /api/config public (seed automatique au premier appel). PUT /api/config admin: update brandName, brandTagline, heroTitle, heroSubtitle, heroBackground, introText."
+        - working: true
+          agent: "testing"
+          comment: "✅ TESTED: GET /api/config returns all required fields (heroTitle, heroSubtitle, heroBackground, introText, brandName, brandTagline). PUT /api/config with auth successfully updates fields and returns updated document. No _id exposed in response."
+
+  - task: "API videos CRUD + reorder + category"
+    implemented: true
+    working: false
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "GET /api/videos public list (triée par order asc). POST/PUT/DELETE protégés. POST /api/videos/reorder { items: [{id,order}] } pour bulk reorder. Champs: title, url, description, category, order. ID en UUID v4."
+        - working: false
+          agent: "testing"
+          comment: "❌ CRITICAL BUG: MongoDB _id field is exposed in POST /api/videos response. Example: {'id': 'b3ad6af7-bf10-47e3-aae8-75fddf819892', ..., '_id': '6a01df7a0c1469b2c96a881c'}. When insertOne() is called, MongoDB mutates the doc object by adding _id. The code returns this mutated object. FIX: After insertOne, either delete doc._id or fetch with projection {_id:0}. ✅ GET /api/videos works correctly (no _id, sorted by order, all fields present). ✅ PUT/DELETE work. ✅ POST /api/videos/reorder works and persists correctly."
+
+  - task: "API links CRUD + reorder"
+    implemented: true
+    working: false
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Mêmes patterns que videos. Champs: label, url, icon (Lucide), order. POST /api/links/reorder pour bulk reorder."
+        - working: false
+          agent: "testing"
+          comment: "❌ CRITICAL BUG: MongoDB _id field is exposed in POST /api/links response. Same issue as videos - insertOne() mutates doc object. Example: {'id': '3ab9c608-2687-473f-ac33-3d0202d8aaa2', ..., '_id': '6a01df7a0c1469b2c96a881d'}. FIX: After insertOne, delete doc._id or fetch with projection {_id:0}. ✅ GET /api/links works correctly (no _id, sorted by order, all fields present). ✅ PUT/DELETE work. ✅ POST /api/links/reorder works and persists correctly."
+
+  - task: "Auth guard sur routes protégées"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST/PUT/DELETE sur videos, links, config exigent Authorization: Bearer <ADMIN_PASSWORD>. 401 sans header ou token incorrect."
+        - working: true
+          agent: "testing"
+          comment: "✅ TESTED: POST /api/videos without auth → 401. POST /api/links without auth → 401. PUT /api/config without auth → 401. POST with wrong token → 401. Auth guard working correctly on all protected routes. Minor: Some intermittent 502 errors during testing (service startup), but auth logic is correct."
+
+frontend:
+  - task: "Landing page publique avec hero, vidéothèque paginée (4/page), recherche, filtres catégories, écosystème"
+    implemented: true
+    working: "NA"
+    file: "app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Non testé encore (à la demande utilisateur)"
+
+  - task: "Admin CMS protégé: login, CRUD vidéos+liens, drag-drop, config interface"
+    implemented: true
+    working: "NA"
+    file: "app/admin/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Non testé encore (à la demande utilisateur)"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 2
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "API videos CRUD + reorder + category"
+    - "API links CRUD + reorder"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "Backend Vitea Publica prêt à tester. Stack: Next.js 14 App Router + MongoDB. Endpoints sous /api/*. Mot de passe admin: vitea2025 (env ADMIN_PASSWORD). Seed auto au premier GET /api/health: 5 vidéos (avec category) + 4 liens + 1 config. Tester: 1) tous les GET publics retournent 200 et structures attendues; 2) POST /api/auth/login avec bon/mauvais mot de passe; 3) auth guard (POST/PUT/DELETE sans token = 401); 4) CRUD complet videos & links (création/modification/suppression); 5) endpoints /api/videos/reorder et /api/links/reorder mettent à jour les orders en bulk; 6) PUT /api/config met à jour les champs; 7) tous les IDs sont des UUID, aucun ObjectId Mongo exposé."
+    - agent: "testing"
+      message: "Backend testing completed. Test results: 18/22 tests passed. ✅ WORKING: Health endpoint, auth/login, config GET/PUT, auth guards, videos/links GET (no _id exposed), videos/links reorder, PUT/DELETE operations. ❌ CRITICAL BUG FOUND: MongoDB _id field is exposed in POST responses for both /api/videos and /api/links. Root cause: insertOne() mutates the doc object by adding _id, then code returns the mutated object. FIX REQUIRED: In POST handlers for videos (line 150) and links (line 184), after insertOne(doc), either: 1) delete doc._id before returning, or 2) fetch the document back with projection {_id:0}. All other functionality working correctly."

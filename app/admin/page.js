@@ -2,7 +2,19 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Lock, LogOut, Plus, Trash2, Save, Video as VideoIcon, Link as LinkIcon, Settings, ArrowLeft, Pencil } from 'lucide-react'
+import {
+  Lock, LogOut, Trash2, Save, Video as VideoIcon, Link as LinkIcon,
+  Settings, ArrowLeft, Pencil, GripVertical,
+} from 'lucide-react'
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor,
+  useSensor, useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove, SortableContext, sortableKeyboardCoordinates,
+  useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -143,11 +155,36 @@ function Dashboard({ token, onLogout }) {
   )
 }
 
+/* ---------------- Sortable wrapper ---------------- */
+function SortableRow({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-2 rounded-md border border-border bg-card p-3">
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Déplacer"
+        className="mt-1 cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  )
+}
+
+/* ---------------- Videos manager ---------------- */
 function VideosManager({ token }) {
   const [videos, setVideos] = useState([])
   const [editing, setEditing] = useState(null)
-  const blank = { title: '', description: '', url: '', order: 1 }
+  const blank = { title: '', description: '', url: '', category: '', order: 1 }
   const [form, setForm] = useState(blank)
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
 
   async function load() {
     try {
@@ -182,7 +219,24 @@ function VideosManager({ token }) {
 
   function edit(v) {
     setEditing(v.id)
-    setForm({ title: v.title, description: v.description, url: v.url, order: v.order })
+    setForm({ title: v.title, description: v.description, url: v.url, category: v.category || '', order: v.order })
+  }
+
+  async function handleDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = videos.findIndex((v) => v.id === active.id)
+    const newIndex = videos.findIndex((v) => v.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    const next = arrayMove(videos, oldIndex, newIndex).map((v, i) => ({ ...v, order: i + 1 }))
+    setVideos(next)
+    try {
+      await api('videos/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ items: next.map((v) => ({ id: v.id, order: v.order })) }),
+      }, token)
+      toast.success('Ordre enregistré')
+    } catch (e) { toast.error(e.message); load() }
   }
 
   return (
@@ -195,6 +249,7 @@ function VideosManager({ token }) {
         <CardContent className="space-y-3">
           <div className="space-y-1"><Label>Titre</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
           <div className="space-y-1"><Label>URL / Embed</Label><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://www.youtube.com/watch?v=..." /></div>
+          <div className="space-y-1"><Label>Catégorie</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Théorie, Applications, Dette publique..." /></div>
           <div className="space-y-1"><Label>Description</Label><Textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           <div className="space-y-1"><Label>Ordre d'affichage</Label><Input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} /></div>
           <div className="flex gap-2 pt-2">
@@ -203,33 +258,54 @@ function VideosManager({ token }) {
           </div>
         </CardContent>
       </Card>
+
       <Card>
-        <CardHeader><CardTitle className="text-base">Vidéos publiées ({videos.length})</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {videos.length === 0 && <div className="py-8 text-center text-sm text-muted-foreground">Aucune vidéo.</div>}
-          {videos.map((v) => (
-            <div key={v.id} className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">#{v.order}</span><div className="truncate font-medium">{v.title}</div></div>
-                <div className="mt-0.5 truncate text-xs text-muted-foreground">{v.url}</div>
-              </div>
-              <div className="flex shrink-0 gap-1">
-                <Button size="icon" variant="ghost" onClick={() => edit(v)}><Pencil className="h-4 w-4" /></Button>
-                <Button size="icon" variant="ghost" onClick={() => remove(v.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-              </div>
-            </div>
-          ))}
+        <CardHeader>
+          <CardTitle className="text-base">Vidéos publiées ({videos.length})</CardTitle>
+          <CardDescription>Glissez-déposez les éléments pour réorganiser l'ordre d'affichage.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {videos.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Aucune vidéo.</div>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={videos.map((v) => v.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {videos.map((v) => (
+                    <SortableRow key={v.id} id={v.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-muted-foreground">#{v.order}</span>
+                            <div className="truncate font-medium">{v.title}</div>
+                            {v.category && <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{v.category}</span>}
+                          </div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{v.url}</div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => edit(v)}><Pencil className="h-4 w-4" /></Button>
+                          <Button size="icon" variant="ghost" onClick={() => remove(v.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      </div>
+                    </SortableRow>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
         </CardContent>
       </Card>
     </div>
   )
 }
 
+/* ---------------- Links manager ---------------- */
 function LinksManager({ token }) {
   const [links, setLinks] = useState([])
   const [editing, setEditing] = useState(null)
   const blank = { label: '', url: '', icon: 'ExternalLink', order: 1 }
   const [form, setForm] = useState(blank)
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
 
   async function load() {
     try { setLinks(await api('links', {}, token)) } catch (e) { toast.error(e.message) }
@@ -256,6 +332,23 @@ function LinksManager({ token }) {
   }
   function edit(l) { setEditing(l.id); setForm({ label: l.label, url: l.url, icon: l.icon, order: l.order }) }
 
+  async function handleDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = links.findIndex((l) => l.id === active.id)
+    const newIndex = links.findIndex((l) => l.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    const next = arrayMove(links, oldIndex, newIndex).map((l, i) => ({ ...l, order: i + 1 }))
+    setLinks(next)
+    try {
+      await api('links/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ items: next.map((l) => ({ id: l.id, order: l.order })) }),
+      }, token)
+      toast.success('Ordre enregistré')
+    } catch (e) { toast.error(e.message); load() }
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
       <Card>
@@ -274,28 +367,48 @@ function LinksManager({ token }) {
           </div>
         </CardContent>
       </Card>
+
       <Card>
-        <CardHeader><CardTitle className="text-base">Liens publiés ({links.length})</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {links.length === 0 && <div className="py-8 text-center text-sm text-muted-foreground">Aucun lien.</div>}
-          {links.map((l) => (
-            <div key={l.id} className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">#{l.order}</span><div className="truncate font-medium">{l.label}</div><span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{l.icon}</span></div>
-                <div className="mt-0.5 truncate text-xs text-muted-foreground">{l.url}</div>
-              </div>
-              <div className="flex shrink-0 gap-1">
-                <Button size="icon" variant="ghost" onClick={() => edit(l)}><Pencil className="h-4 w-4" /></Button>
-                <Button size="icon" variant="ghost" onClick={() => remove(l.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-              </div>
-            </div>
-          ))}
+        <CardHeader>
+          <CardTitle className="text-base">Liens publiés ({links.length})</CardTitle>
+          <CardDescription>Glissez-déposez les éléments pour réorganiser l'ordre d'affichage.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {links.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Aucun lien.</div>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={links.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {links.map((l) => (
+                    <SortableRow key={l.id} id={l.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-muted-foreground">#{l.order}</span>
+                            <div className="truncate font-medium">{l.label}</div>
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{l.icon}</span>
+                          </div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{l.url}</div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => edit(l)}><Pencil className="h-4 w-4" /></Button>
+                          <Button size="icon" variant="ghost" onClick={() => remove(l.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      </div>
+                    </SortableRow>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
         </CardContent>
       </Card>
     </div>
   )
 }
 
+/* ---------------- Config manager ---------------- */
 function ConfigManager({ token }) {
   const [cfg, setCfg] = useState(null)
   async function load() { try { setCfg(await api('config', {}, token)) } catch (e) { toast.error(e.message) } }

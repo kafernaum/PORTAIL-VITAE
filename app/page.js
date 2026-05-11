@@ -2,10 +2,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import * as LucideIcons from 'lucide-react'
-import { ArrowRight, ExternalLink, PlayCircle, Library, Shield, Clock, Scale, LineChart } from 'lucide-react'
+import { ArrowRight, ExternalLink, PlayCircle, Library, Shield, Clock, Scale, LineChart, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { toEmbedUrl, isDirectVideo } from '@/lib/video-utils'
 
@@ -17,6 +18,8 @@ export default function HomePage() {
   const [links, setLinks] = useState([])
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState('all')
 
   useEffect(() => {
     Promise.all([
@@ -32,11 +35,35 @@ export default function HomePage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const totalPages = Math.max(1, Math.ceil(videos.length / PAGE_SIZE))
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [query, activeCategory])
+
+  const categories = useMemo(() => {
+    const set = new Set()
+    videos.forEach((v) => v.category && set.add(v.category))
+    return Array.from(set).sort()
+  }, [videos])
+
+  const filteredVideos = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return videos.filter((v) => {
+      const matchesQuery =
+        !q ||
+        (v.title || '').toLowerCase().includes(q) ||
+        (v.description || '').toLowerCase().includes(q) ||
+        (v.category || '').toLowerCase().includes(q)
+      const matchesCat = activeCategory === 'all' || v.category === activeCategory
+      return matchesQuery && matchesCat
+    })
+  }, [videos, query, activeCategory])
+
+  const totalPages = Math.max(1, Math.ceil(filteredVideos.length / PAGE_SIZE))
   const currentVideos = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
-    return videos.slice(start, start + PAGE_SIZE)
-  }, [videos, page])
+    return filteredVideos.slice(start, start + PAGE_SIZE)
+  }, [filteredVideos, page])
 
   const heroBg = config?.heroBackground || ''
   const heroTitle = config?.heroTitle || 'Théorie Vitaliste des Finances Publiques'
@@ -122,7 +149,7 @@ export default function HomePage() {
 
       {/* Vidéothèque */}
       <section id="videotheque" className="container py-20">
-        <div className="mb-10 flex items-end justify-between gap-4">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Section I</div>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Vidéothèque & Applications</h2>
@@ -131,8 +158,62 @@ export default function HomePage() {
             </p>
           </div>
           <div className="hidden text-sm text-muted-foreground sm:block">
-            {videos.length} session{videos.length > 1 ? 's' : ''} • Page {page} / {totalPages}
+            {filteredVideos.length} session{filteredVideos.length > 1 ? 's' : ''} • Page {page} / {totalPages}
           </div>
+        </div>
+
+        {/* Search + Category filter */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Rechercher dans la vidéothèque..."
+              className="pl-9 pr-9"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                aria-label="Effacer la recherche"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveCategory('all')}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  activeCategory === 'all'
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                }`}
+              >
+                Toutes ({videos.length})
+              </button>
+              {categories.map((c) => {
+                const count = videos.filter((v) => v.category === c).length
+                const active = activeCategory === c
+                return (
+                  <button
+                    key={c}
+                    onClick={() => setActiveCategory(c)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                      active
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                    }`}
+                  >
+                    {c} ({count})
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -141,9 +222,9 @@ export default function HomePage() {
               <div key={i} className="h-72 animate-pulse rounded-lg border border-border bg-muted" />
             ))}
           </div>
-        ) : videos.length === 0 ? (
+        ) : filteredVideos.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-12 text-center text-muted-foreground">
-            Aucune vidéo publiée pour le moment.
+            {videos.length === 0 ? 'Aucune vidéo publiée pour le moment.' : 'Aucun résultat ne correspond à votre recherche.'}
           </div>
         ) : (
           <>
@@ -164,7 +245,14 @@ export default function HomePage() {
                     )}
                   </div>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg leading-snug">{v.title}</CardTitle>
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="text-lg leading-snug">{v.title}</CardTitle>
+                      {v.category && (
+                        <Badge variant="secondary" className="shrink-0 text-[10px] uppercase tracking-wider">
+                          {v.category}
+                        </Badge>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <CardDescription className="text-sm leading-relaxed">
@@ -176,25 +264,27 @@ export default function HomePage() {
             </div>
 
             {/* Pagination */}
-            <div className="mt-10 flex items-center justify-center gap-2">
-              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                Précédent
-              </Button>
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <Button
-                  key={i}
-                  variant={page === i + 1 ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-9 w-9 p-0"
-                  onClick={() => setPage(i + 1)}
-                >
-                  {i + 1}
+            {totalPages > 1 && (
+              <div className="mt-10 flex items-center justify-center gap-2">
+                <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  Précédent
                 </Button>
-              ))}
-              <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                Suivant
-              </Button>
-            </div>
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <Button
+                    key={i}
+                    variant={page === i + 1 ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-9 w-9 p-0"
+                    onClick={() => setPage(i + 1)}
+                  >
+                    {i + 1}
+                  </Button>
+                ))}
+                <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  Suivant
+                </Button>
+              </div>
+            )}
           </>
         )}
       </section>

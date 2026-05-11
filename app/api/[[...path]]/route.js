@@ -36,6 +36,7 @@ async function ensureDefaults(db) {
         title: "Introduction à la Théorie Vitaliste",
         description: "Fondements épistémologiques : pourquoi mesurer l'impôt en heures de vie plutôt qu'en unités monétaires révèle la nature profonde de la contrainte fiscale.",
         url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        category: 'Théorie',
         order: 1,
         createdAt: new Date().toISOString(),
       },
@@ -44,6 +45,7 @@ async function ensureDefaults(db) {
         title: "L'impôt comme transfert de temps",
         description: "Démonstration analytique du passage de la valeur monétaire au quantum de temps de vie, et de ses implications constitutionnelles.",
         url: 'https://www.youtube.com/watch?v=9bZkp7q19f0',
+        category: 'Théorie',
         order: 2,
         createdAt: new Date().toISOString(),
       },
@@ -52,6 +54,7 @@ async function ensureDefaults(db) {
         title: "Dette publique et générations futures",
         description: "Comment l'approche vitaliste recompose la lecture de la soutenabilité de la dette en termes d'années-vies engagées.",
         url: 'https://www.youtube.com/watch?v=3JZ_D3ELwOQ',
+        category: 'Dette publique',
         order: 3,
         createdAt: new Date().toISOString(),
       },
@@ -60,6 +63,7 @@ async function ensureDefaults(db) {
         title: "Applications pratiques de la théorie",
         description: "Présentation des outils analytiques opérationnels dérivés du paradigme : analyseur de dette, calculateur d'impact vitaliste, manuels techniques.",
         url: 'https://www.youtube.com/watch?v=kJQP7kiw5Fk',
+        category: 'Applications',
         order: 4,
         createdAt: new Date().toISOString(),
       },
@@ -68,6 +72,7 @@ async function ensureDefaults(db) {
         title: "Réforme fiscale et indicateurs vitalistes",
         description: "Proposer une refonte des indicateurs publics fondée sur l'unité temps-de-vie : méthodologie et études de cas comparées.",
         url: 'https://www.youtube.com/watch?v=hT_nvWreIhg',
+        category: 'Réforme',
         order: 5,
         createdAt: new Date().toISOString(),
       },
@@ -138,11 +143,34 @@ export async function POST(request, { params }) {
         title: body.title || 'Sans titre',
         description: body.description || '',
         url: body.url || '',
+        category: body.category || '',
         order: typeof body.order === 'number' ? body.order : 999,
         createdAt: new Date().toISOString(),
       }
       await db.collection('videos').insertOne(doc)
       return json(doc)
+    }
+
+    if (path === 'videos/reorder') {
+      const items = Array.isArray(body.items) ? body.items : []
+      const ops = items
+        .filter((x) => x && x.id)
+        .map((x) => ({
+          updateOne: { filter: { id: x.id }, update: { $set: { order: Number(x.order) || 0 } } },
+        }))
+      if (ops.length) await db.collection('videos').bulkWrite(ops)
+      return json({ ok: true, updated: ops.length })
+    }
+
+    if (path === 'links/reorder') {
+      const items = Array.isArray(body.items) ? body.items : []
+      const ops = items
+        .filter((x) => x && x.id)
+        .map((x) => ({
+          updateOne: { filter: { id: x.id }, update: { $set: { order: Number(x.order) || 0 } } },
+        }))
+      if (ops.length) await db.collection('links').bulkWrite(ops)
+      return json({ ok: true, updated: ops.length })
     }
 
     if (path === 'links') {
@@ -190,7 +218,7 @@ export async function PUT(request, { params }) {
     if (m) {
       const id = m[1]
       const update = {}
-      ;['title', 'description', 'url', 'order'].forEach((k) => {
+      ;['title', 'description', 'url', 'category', 'order'].forEach((k) => {
         if (body[k] !== undefined) update[k] = body[k]
       })
       await db.collection('videos').updateOne({ id }, { $set: update })
