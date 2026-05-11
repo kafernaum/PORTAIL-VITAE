@@ -27,6 +27,9 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme-strong-password}
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-https://portail.vitae-publica.tech}
       - CORS_ORIGINS=*
+      - UPLOAD_DIR=/app/data/uploads
+    volumes:
+      - uploads_data:/app/data
     ports:
       - "127.0.0.1:8006:8006"   # only exposed on localhost, Caddy/Nginx will reverse-proxy
     networks:
@@ -34,6 +37,7 @@ services:
 
 volumes:
   mongo_data:
+  uploads_data:
 
 networks:
   vitae_net:

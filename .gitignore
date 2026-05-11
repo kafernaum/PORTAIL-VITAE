@@ -99,3 +99,7 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+
+# User-uploaded files (persisted via Docker volume in production)
+/data/

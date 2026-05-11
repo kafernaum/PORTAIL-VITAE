@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ThemeToggle } from '@/components/theme-toggle'
+import FileDrop from '@/components/file-drop'
 
 function useToken() {
   const [token, setToken] = useState(null)
@@ -248,7 +249,20 @@ function VideosManager({ token }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1"><Label>Titre</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-          <div className="space-y-1"><Label>URL / Embed</Label><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://www.youtube.com/watch?v=..." /></div>
+          <div className="space-y-1">
+            <Label>URL / Embed</Label>
+            <Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://www.youtube.com/watch?v=..." />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">… ou uploadez un fichier vidéo</Label>
+            <FileDrop
+              token={token}
+              accept="video/mp4,video/webm,video/quicktime,video/ogg"
+              kind="vidéo"
+              maxSizeMB={500}
+              onUploaded={(res) => setForm((f) => ({ ...f, url: res.url }))}
+            />
+          </div>
           <div className="space-y-1"><Label>Catégorie</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Théorie, Applications, Dette publique..." /></div>
           <div className="space-y-1"><Label>Description</Label><Textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           <div className="space-y-1"><Label>Ordre d'affichage</Label><Input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} /></div>
@@ -377,6 +391,16 @@ function LinksManager({ token }) {
                 <img src={form.imageUrl} alt="Aperçu" className="aspect-video w-full object-cover" />
               </div>
             )}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">… ou uploadez une image</Label>
+            <FileDrop
+              token={token}
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              kind="image"
+              maxSizeMB={20}
+              onUploaded={(res) => setForm((f) => ({ ...f, imageUrl: res.url }))}
+            />
           </div>
           <div className="space-y-1"><Label>Description (optionnelle, affichée sous le label)</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brève description du site / outil…" /></div>
           <div className="space-y-1"><Label>Icône (Lucide)</Label><Input value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} /></div>
