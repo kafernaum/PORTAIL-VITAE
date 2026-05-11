@@ -183,7 +183,7 @@ function SortableRow({ id, children }) {
 function VideosManager({ token }) {
   const [videos, setVideos] = useState([])
   const [editing, setEditing] = useState(null)
-  const blank = { title: '', description: '', url: '', category: '', order: 1 }
+  const blank = { title: '', description: '', url: '', posterUrl: '', category: '', order: 1 }
   const [form, setForm] = useState(blank)
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
 
@@ -220,7 +220,14 @@ function VideosManager({ token }) {
 
   function edit(v) {
     setEditing(v.id)
-    setForm({ title: v.title, description: v.description, url: v.url, category: v.category || '', order: v.order })
+    setForm({
+      title: v.title,
+      description: v.description,
+      url: v.url,
+      posterUrl: v.posterUrl || '',
+      category: v.category || '',
+      order: v.order,
+    })
   }
 
   async function handleDragEnd(event) {
@@ -260,8 +267,18 @@ function VideosManager({ token }) {
               accept="video/mp4,video/webm,video/quicktime,video/ogg"
               kind="vidéo"
               maxSizeMB={500}
-              onUploaded={(res) => setForm((f) => ({ ...f, url: res.url }))}
+              currentUrl={form.url}
+              onUploaded={(res) => setForm((f) => ({ ...f, url: res.url, posterUrl: res.thumbnailUrl || '' }))}
+              onDeleted={() => setForm((f) => ({ ...f, url: '', posterUrl: '' }))}
             />
+            {form.posterUrl && (
+              <div className="mt-1 overflow-hidden rounded-md border border-border">
+                <img src={form.posterUrl} alt="Poster auto-généré" className="aspect-video w-full object-cover" />
+                <div className="bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                  Poster auto-généré (ffmpeg)
+                </div>
+              </div>
+            )}
           </div>
           <div className="space-y-1"><Label>Catégorie</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Théorie, Applications, Dette publique..." /></div>
           <div className="space-y-1"><Label>Description</Label><Textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
@@ -399,7 +416,9 @@ function LinksManager({ token }) {
               accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
               kind="image"
               maxSizeMB={20}
+              currentUrl={form.imageUrl}
               onUploaded={(res) => setForm((f) => ({ ...f, imageUrl: res.url }))}
+              onDeleted={() => setForm((f) => ({ ...f, imageUrl: '' }))}
             />
           </div>
           <div className="space-y-1"><Label>Description (optionnelle, affichée sous le label)</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brève description du site / outil…" /></div>

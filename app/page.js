@@ -233,7 +233,7 @@ export default function HomePage() {
                 <Card key={v.id} className="overflow-hidden transition hover:shadow-lg">
                   <div className="aspect-video w-full bg-black">
                     {isDirectVideo(v.url) ? (
-                      <video controls className="h-full w-full" src={v.url} />
+                      <video controls className="h-full w-full" src={v.url} poster={v.posterUrl || undefined} preload="metadata" />
                     ) : (
                       <iframe
                         src={toEmbedUrl(v.url)}

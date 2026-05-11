@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { promises as fs } from 'fs'
 import { createReadStream } from 'fs'
 import path from 'path'
+import { spawn } from 'child_process'
 import { getDb } from '@/lib/mongo'
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'vitea2025'
@@ -11,6 +12,7 @@ const TMP_DIR = path.join(UPLOAD_DIR, '.tmp')
 const CHUNK_SIZE = 4 * 1024 * 1024 // 4MB
 const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB (videos)
 const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'webm', 'mov', 'm4v', 'ogg']
+const VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'ogg']
 
 const MIME_BY_EXT = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
@@ -27,6 +29,56 @@ async function ensureDirs() {
 function safeExt(filename) {
   const ext = (filename || '').split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '')
   return ALLOWED_EXT.includes(ext) ? ext : null
+}
+
+/**
+ * Generate a thumbnail (poster image) from a video file using ffmpeg.
+ * Returns the thumbnail filename on success, null on failure.
+ * Best-effort: failures do not break the upload flow.
+ */
+const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg'
+
+async function generateVideoThumbnail(videoFilename) {
+  const videoPath = path.join(UPLOAD_DIR, videoFilename)
+  const thumbName = videoFilename.replace(/\.[^.]+$/, '') + '.poster.jpg'
+  const thumbPath = path.join(UPLOAD_DIR, thumbName)
+
+  function runFfmpeg(args) {
+    return new Promise((resolve) => {
+      let stderr = ''
+      let proc
+      try {
+        proc = spawn(FFMPEG_BIN, args)
+      } catch (e) {
+        resolve({ code: -1, error: e.message })
+        return
+      }
+      proc.stderr?.on('data', (d) => { stderr += d.toString().slice(0, 500) })
+      proc.on('error', (e) => resolve({ code: -1, error: e.message, stderr }))
+      proc.on('close', (code) => resolve({ code, stderr }))
+    })
+  }
+
+  // Attempt 1: seek to 1s
+  let r = await runFfmpeg([
+    '-y', '-ss', '00:00:01', '-i', videoPath,
+    '-frames:v', '1', '-update', '1', '-q:v', '3',
+    '-vf', 'scale=1280:-2', '-an',
+    thumbPath,
+  ])
+  try { await fs.access(thumbPath); return thumbName } catch {}
+
+  // Attempt 2: first frame (for very short clips)
+  r = await runFfmpeg([
+    '-y', '-i', videoPath,
+    '-frames:v', '1', '-update', '1', '-q:v', '3',
+    '-vf', 'scale=1280:-2', '-an',
+    thumbPath,
+  ])
+  try { await fs.access(thumbPath); return thumbName } catch {}
+
+  if (r?.stderr) console.warn('[thumbnail] ffmpeg failed:', r.stderr.slice(-300))
+  return null
 }
 
 function json(data, init = {}) {
@@ -228,10 +280,19 @@ export async function POST(request, { params }) {
           await fs.unlink(path.join(TMP_DIR, `${uploadId}.chunk${i}`)).catch(() => {})
         }
         await fs.unlink(metaPath).catch(() => {})
+
+        // Best-effort: generate thumbnail if it's a video
+        let thumbnailUrl = null
+        if (VIDEO_EXT.includes(meta.ext)) {
+          const thumbName = await generateVideoThumbnail(finalName)
+          if (thumbName) thumbnailUrl = `/api/files/${thumbName}`
+        }
+
         const url = `/api/files/${finalName}`
         return json({
           status: 'completed',
           url,
+          thumbnailUrl,
           filename: finalName,
           originalName: meta.originalName,
           mimeType: meta.mimeType,
@@ -285,6 +346,7 @@ export async function POST(request, { params }) {
         title: body.title || 'Sans titre',
         description: body.description || '',
         url: body.url || '',
+        posterUrl: body.posterUrl || '',
         category: body.category || '',
         order: typeof body.order === 'number' ? body.order : 999,
         createdAt: new Date().toISOString(),
@@ -364,7 +426,7 @@ export async function PUT(request, { params }) {
     if (m) {
       const id = m[1]
       const update = {}
-      ;['title', 'description', 'url', 'category', 'order'].forEach((k) => {
+      ;['title', 'description', 'url', 'posterUrl', 'category', 'order'].forEach((k) => {
         if (body[k] !== undefined) update[k] = body[k]
       })
       await db.collection('videos').updateOne({ id }, { $set: update })
@@ -393,8 +455,31 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     if (!isAuth(request)) return json({ error: 'Unauthorized' }, { status: 401 })
-    const db = await getDb()
     const path_ = (params?.path || []).join('/')
+
+    // ----- Delete an uploaded file (and its poster if video) -----
+    const fileMatch = path_.match(/^files\/([A-Za-z0-9_.-]+)$/)
+    if (fileMatch) {
+      const fname = fileMatch[1]
+      const allowed = path.resolve(UPLOAD_DIR)
+      const target = path.resolve(path.join(UPLOAD_DIR, fname))
+      if (!target.startsWith(allowed)) {
+        return json({ error: 'Invalid path' }, { status: 400 })
+      }
+      let deleted = false
+      try { await fs.unlink(target); deleted = true } catch {}
+      // Also remove the auto-generated poster if it exists (video case)
+      const posterName = fname.replace(/\.[^.]+$/, '') + '.poster.jpg'
+      const posterPath = path.resolve(path.join(UPLOAD_DIR, posterName))
+      let posterDeleted = false
+      if (posterPath.startsWith(allowed)) {
+        try { await fs.unlink(posterPath); posterDeleted = true } catch {}
+      }
+      if (!deleted) return json({ error: 'File not found' }, { status: 404 })
+      return json({ ok: true, deleted: fname, posterDeleted })
+    }
+
+    const db = await getDb()
 
     const m = path_.match(/^videos\/(.+)$/)
     if (m) {

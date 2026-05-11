@@ -15,12 +15,18 @@ ENV NODE_ENV=production
 ENV PORT=8006
 ENV HOSTNAME=0.0.0.0
 
+# ffmpeg required for automatic video thumbnail (poster) generation
+RUN apk add --no-cache ffmpeg
+
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+
+# Pre-create the persistent data dir (volume-mounted in docker-compose)
+RUN mkdir -p /app/data/uploads && chown -R nextjs:nodejs /app/data
 
 USER nextjs
 EXPOSE 8006

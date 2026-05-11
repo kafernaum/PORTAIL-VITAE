@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useCallback } from 'react'
-import { Upload, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { Upload, X, CheckCircle2, AlertCircle, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
@@ -15,14 +15,19 @@ const CHUNK_SIZE = 4 * 1024 * 1024 // 4MB
  *   - accept          (string)   "image/*" or "video/*" or comma-list of mimes/extensions
  *   - kind            (string)   Label for UX ("image" or "vidéo")
  *   - maxSizeMB       (number)   Soft client cap (default 500)
- *   - onUploaded      (fn)       Callback({url, filename, originalName, mimeType, size}) on success
+ *   - currentUrl      (string)   If set & starts with /api/files/, show a Delete button
+ *                                so the admin can remove an existing uploaded file from disk.
+ *   - onUploaded      (fn)       Callback({url, thumbnailUrl, filename, originalName, mimeType, size}) on success
+ *   - onDeleted       (fn)       Callback() after user deletes the current uploaded file
  */
 export default function FileDrop({
   token,
   accept = 'image/*',
   kind = 'fichier',
   maxSizeMB = 500,
+  currentUrl,
   onUploaded,
+  onDeleted,
 }) {
   const inputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -30,9 +35,37 @@ export default function FileDrop({
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState(null)
   const [done, setDone] = useState(null) // { url, originalName }
+  const [deleting, setDeleting] = useState(false)
 
   const reset = () => {
     setUploading(false); setProgress(0); setError(null)
+  }
+
+  const isUploadedFile = typeof currentUrl === 'string' && currentUrl.startsWith('/api/files/')
+
+  async function deleteCurrentFile() {
+    if (!currentUrl) return
+    const filename = currentUrl.replace(/^\/api\/files\//, '')
+    if (!filename || !/^[A-Za-z0-9_.-]+$/.test(filename)) {
+      toast.error('Nom de fichier invalide'); return
+    }
+    if (!window.confirm(`Supprimer définitivement ce ${kind === 'vidéo' ? 'fichier vidéo' : 'fichier image'} du serveur ?`)) return
+    setDeleting(true)
+    try {
+      const r = await fetch(`/api/files/${filename}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || `Suppression échouée (${r.status})`)
+      toast.success(d.posterDeleted ? 'Fichier + poster supprimés du serveur' : 'Fichier supprimé du serveur')
+      setDone(null); setError(null)
+      onDeleted?.()
+    } catch (e) {
+      toast.error(e.message || 'Erreur de suppression')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const upload = useCallback(async (file) => {
@@ -113,11 +146,31 @@ export default function FileDrop({
     >
       <input ref={inputRef} type="file" accept={accept} onChange={onSelect} className="hidden" />
 
+      {/* Existing uploaded file: show banner with delete option */}
+      {isUploadedFile && !uploading && !done && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-border bg-background p-2 text-sm">
+          <div className="flex min-w-0 items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+            <span className="truncate text-xs font-mono">{currentUrl.replace('/api/files/', '')}</span>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={deleteCurrentFile}
+            disabled={deleting}
+            className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {deleting ? 'Suppression…' : 'Supprimer le fichier'}
+          </Button>
+        </div>
+      )}
+
       {!uploading && !done && !error && (
         <div className="flex flex-col items-center gap-2 py-2 text-center">
           <Upload className="h-5 w-5 text-muted-foreground" />
           <div className="text-sm text-foreground">
-            Glissez-déposez votre {kind} ici
+            {isUploadedFile ? `Remplacer par un nouveau ${kind} :` : `Glissez-déposez votre ${kind} ici`}
           </div>
           <div className="text-xs text-muted-foreground">ou</div>
           <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
