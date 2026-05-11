@@ -4,7 +4,7 @@
 # ------------------------------------------------------------------------------
 #  À utiliser UNIQUEMENT si vous avez déjà installé l'application avec
 #  deploy/install.sh. Ce script applique les améliorations sans réinstaller
-#  Docker / Caddy / UFW :
+#  Docker / Nginx / UFW :
 #    1. Synchronise le code à jour dans ${INSTALL_DIR}
 #    2. Rebuild l'image Docker (ajout de ffmpeg dans le Dockerfile)
 #    3. Redémarre les conteneurs proprement (volume uploads préservé)

@@ -6,7 +6,7 @@ Ce document décrit la mise en production de l'application sur un VPS Linux (Deb
 
 ## 🚀 Installation automatique (recommandée)
 
-Un script unique qui installe Docker + Caddy + l'app + HTTPS + pare-feu :
+Un script unique qui installe Docker + Nginx + Certbot + l'app + HTTPS + pare-feu :
 
 ```bash
 # 1. Cloner le dépôt sur le VPS
@@ -26,18 +26,26 @@ sudo DOMAIN=portail.vitae-publica.tech \
 Le script `deploy/install.sh` est **idempotent** : vous pouvez le relancer pour mettre à jour le code ou la configuration sans casser l'existant. Il :
 
 - détecte / installe Docker CE + Compose plugin si absents,
-- détecte / installe Caddy (reverse-proxy avec HTTPS automatique via Let's Encrypt),
+- détecte / installe Nginx + Certbot (plugin nginx) si absents — **respecte un Nginx déjà configuré pour d'autres sites/sous-domaines**,
 - synchronise le code dans `/opt/portail-vitae` (ou `INSTALL_DIR`),
 - génère un `.env` sécurisé (mot de passe admin aléatoire si non fourni, `chmod 600`),
 - construit et démarre les conteneurs avec `docker compose`,
 - attend que l'API `/api/health` réponde (timeout 90 s + logs en cas d'échec),
-- écrit un bloc géré dans `/etc/caddy/Caddyfile` (entre marqueurs, donc remplaçable sans toucher au reste),
+- dépose un vhost dans `/etc/nginx/sites-available/portail-vitae` (avec backup horodaté si un existait déjà) et active le symlink dans `sites-enabled/`,
+- émet le certificat TLS Let's Encrypt via `certbot --nginx --redirect` (HTTP→HTTPS automatique),
 - configure UFW (22/80/443 ouverts, 8006 reste local).
+
+**Variables d'environnement utiles** :
+
+- `DOMAIN`, `EMAIL`, `ADMIN_PASSWORD`, `REPO_URL`, `INSTALL_DIR`
+- `SKIP_NGINX=1` pour ne pas toucher à Nginx
+- `SKIP_TLS=1` pour ne pas émettre de certificat Let's Encrypt (si un reverse-proxy amont ou un CDN gère déjà le TLS)
+- `SKIP_FIREWALL=1` pour ne pas toucher à UFW
 
 **Pré-requis** :
 
 1. VPS Debian 11/12 ou Ubuntu 22.04/24.04 avec accès `sudo`.
-2. Enregistrement DNS A/AAAA `portail.vitae-publica.tech` → IP du VPS (sans cela Let's Encrypt échouera).
+2. Enregistrement DNS A/AAAA `portail.vitae-publica.tech` → IP du VPS (sans cela Let's Encrypt échouera — passez `SKIP_TLS=1` en attendant la propagation).
 3. Le code source (clone Git du dépôt) accessible sur la machine.
 
 À la fin, le script affiche l'URL, le mot de passe admin et les commandes utiles.
@@ -121,22 +129,15 @@ sudo systemctl enable --now portail-vitae
 
 ## Reverse-proxy + HTTPS (manuel)
 
-### Avec Caddy (le plus simple — HTTPS automatique)
-
-```bash
-sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-```
-
-### Avec Nginx + Certbot
+### Nginx + Certbot
 
 ```bash
 sudo cp deploy/nginx.conf /etc/nginx/sites-available/portail-vitae
-sudo ln -s /etc/nginx/sites-available/portail-vitae /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/portail-vitae /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d portail.vitae-publica.tech
+sudo certbot --nginx -d portail.vitae-publica.tech --redirect
 ```
 
 ---
@@ -167,7 +168,7 @@ Programmez un `cron` quotidien pour automatiser.
 
 ### Upgrade applicatif (recommandé) — script dédié
 
-Si l'environnement est déjà en place (Docker, Caddy, UFW configurés par `install.sh`), utilisez `upgrade.sh` qui **ne réinstalle rien** et se contente d'appliquer les améliorations applicatives :
+Si l'environnement est déjà en place (Docker, Nginx, UFW configurés par `install.sh`), utilisez `upgrade.sh` qui **ne réinstalle rien** et se contente d'appliquer les améliorations applicatives :
 
 ```bash
 cd /opt/portail-vitae

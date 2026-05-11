@@ -103,3 +103,12 @@ credentials.json
 
 # User-uploaded files (persisted via Docker volume in production)
 /data/
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials

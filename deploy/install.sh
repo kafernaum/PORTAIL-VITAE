@@ -20,7 +20,9 @@
 #                                     déjà dans le projet, on demande à l'utilisateur.
 #     INSTALL_DIR     (optionnel)     Défaut : /opt/portail-vitae
 #     SKIP_FIREWALL   (optionnel)     Mettre "1" pour ne pas toucher à ufw
-#     SKIP_CADDY      (optionnel)     Mettre "1" pour ne pas configurer Caddy
+#     SKIP_NGINX      (optionnel)     Mettre "1" pour ne pas configurer Nginx/Certbot
+#     SKIP_TLS        (optionnel)     Mettre "1" pour ne PAS émettre de cert Let's Encrypt
+#                                     (utile si Nginx amont/CDN gère déjà le TLS)
 #
 #  Le script est idempotent : vous pouvez le relancer sans casser l'existant.
 # ==============================================================================
@@ -140,22 +142,24 @@ else
     ok "Docker installé : $(docker --version)"
 fi
 
-# ---------- 5. Caddy ----------------------------------------------------------
-if [[ "${SKIP_CADDY:-0}" != "1" ]]; then
-    step "Installation de Caddy (reverse-proxy + HTTPS)"
-    if command -v caddy >/dev/null 2>&1; then
-        ok "Caddy déjà installé : $(caddy version | head -n1)"
+# ---------- 5. Nginx + Certbot ------------------------------------------------
+if [[ "${SKIP_NGINX:-0}" != "1" ]]; then
+    step "Installation de Nginx + Certbot (si absents)"
+    if command -v nginx >/dev/null 2>&1; then
+        ok "Nginx déjà installé : $(nginx -v 2>&1)"
     else
-        if [[ ! -f /etc/apt/sources.list.d/caddy-stable.list ]]; then
-            curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
-                | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-            curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
-                > /etc/apt/sources.list.d/caddy-stable.list
-        fi
-        apt-get update -y >/dev/null
-        apt-get install -y --no-install-recommends caddy >/dev/null
-        ok "Caddy installé : $(caddy version | head -n1)"
+        apt-get install -y --no-install-recommends nginx >/dev/null
+        ok "Nginx installé"
     fi
+    if [[ "${SKIP_TLS:-0}" != "1" ]]; then
+        if command -v certbot >/dev/null 2>&1 && dpkg -s python3-certbot-nginx >/dev/null 2>&1; then
+            ok "Certbot + plugin Nginx déjà présents"
+        else
+            apt-get install -y --no-install-recommends certbot python3-certbot-nginx >/dev/null
+            ok "Certbot + plugin Nginx installés"
+        fi
+    fi
+    systemctl enable --now nginx >/dev/null 2>&1 || true
 fi
 
 # ---------- 6. Code source ----------------------------------------------------
@@ -258,71 +262,93 @@ echo
 HEALTH_BODY=$(curl -fsS "$HEALTH_URL")
 ok "API en ligne — ${HEALTH_BODY}"
 
-# ---------- 10. Caddy (reverse-proxy + HTTPS) ---------------------------------
-if [[ "${SKIP_CADDY:-0}" != "1" ]]; then
-    step "Configuration de Caddy pour ${DOMAIN}"
-    CADDYFILE=/etc/caddy/Caddyfile
-    BLOCK_BEGIN="# >>> portail-vitae managed BEGIN"
-    BLOCK_END="# <<< portail-vitae managed END"
+# ---------- 10. Nginx (reverse-proxy + HTTPS via Certbot) --------------------
+if [[ "${SKIP_NGINX:-0}" != "1" ]]; then
+    step "Configuration de Nginx pour ${DOMAIN}"
+    NGINX_AVAIL=/etc/nginx/sites-available/portail-vitae
+    NGINX_ENABLED=/etc/nginx/sites-enabled/portail-vitae
 
-    # Construit le nouveau bloc géré
-    NEW_BLOCK=$(cat <<EOF
-${BLOCK_BEGIN}
-{
-    email ${EMAIL}
-}
+    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 
-${DOMAIN} {
-    encode zstd gzip
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "SAMEORIGIN"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Permissions-Policy "interest-cohort=()"
-    }
-    reverse_proxy 127.0.0.1:8006 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-    }
-    log {
-        output file /var/log/caddy/portail-vitae.log
-        format console
-    }
-}
-${BLOCK_END}
-EOF
-)
-
-    # On s'assure que /etc/caddy existe
-    mkdir -p /etc/caddy /var/log/caddy
-
-    if [[ -f "$CADDYFILE" ]] && grep -qF "$BLOCK_BEGIN" "$CADDYFILE"; then
-        # Remplace le bloc existant
-        awk -v begin="$BLOCK_BEGIN" -v end="$BLOCK_END" -v new="$NEW_BLOCK" '
-            BEGIN { skip=0 }
-            $0 ~ begin { print new; skip=1; next }
-            $0 ~ end   { skip=0; next }
-            skip==0    { print }
-        ' "$CADDYFILE" > "${CADDYFILE}.new"
-        mv "${CADDYFILE}.new" "$CADDYFILE"
-        ok "Bloc Caddy existant mis à jour"
-    else
-        # Backup puis ajout du bloc
-        [[ -f "$CADDYFILE" ]] && cp -n "$CADDYFILE" "${CADDYFILE}.bak.$(date +%s)" || true
-        printf "\n%s\n" "$NEW_BLOCK" >> "$CADDYFILE"
-        ok "Bloc Caddy ajouté"
+    # On écrit un vhost HTTP minimal compatible avec le plugin Certbot --nginx,
+    # qui ajoutera ensuite automatiquement le bloc HTTPS et le redirect 80→443.
+    # Si la conf existe déjà, on la backup une fois puis on l'écrase.
+    if [[ -f "$NGINX_AVAIL" ]]; then
+        cp -n "$NGINX_AVAIL" "${NGINX_AVAIL}.bak.$(date +%s)" || true
     fi
 
+    cat > "$NGINX_AVAIL" <<NGINXEOF
+# Managed by portail-vitae install.sh — do not edit manually
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    # Required for chunked uploads (4 MB per chunk + headroom)
+    client_max_body_size 25M;
+
+    # Performance / compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript image/svg+xml;
+
+    # Reverse proxy vers le conteneur app sur 127.0.0.1:8006
+    location / {
+        proxy_pass         http://127.0.0.1:8006;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade           \$http_upgrade;
+        proxy_set_header   Connection        "upgrade";
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 90s;
+    }
+
+    access_log /var/log/nginx/portail-vitae.access.log;
+    error_log  /var/log/nginx/portail-vitae.error.log warn;
+}
+NGINXEOF
+
+    # Symlink dans sites-enabled (idempotent)
+    ln -sfn "$NGINX_AVAIL" "$NGINX_ENABLED"
+    ok "Vhost Nginx déposé : $NGINX_AVAIL"
+
+    # On garde le default activé si l'utilisateur a d'autres sites — on ne le supprime PAS
+    # (l'utilisateur a précisé qu'il utilise Nginx pour tout le domaine + sous-domaines)
+
     # Validation puis reload
-    if caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1; then
-        systemctl enable --now caddy >/dev/null
-        systemctl reload caddy
-        ok "Caddy rechargé"
+    if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx
+        ok "Nginx rechargé (vhost HTTP actif)"
     else
-        warn "Configuration Caddy invalide — détails ci-dessous :"
-        caddy validate --config "$CADDYFILE" --adapter caddyfile || true
-        fail "Corrigez $CADDYFILE puis relancez : systemctl reload caddy"
+        warn "Configuration Nginx invalide — détails ci-dessous :"
+        nginx -t || true
+        fail "Corrigez $NGINX_AVAIL puis relancez : systemctl reload nginx"
+    fi
+
+    # --- TLS via Certbot ---
+    if [[ "${SKIP_TLS:-0}" != "1" ]]; then
+        if [[ -d "/etc/letsencrypt/live/${DOMAIN}" ]]; then
+            ok "Certificat Let's Encrypt déjà présent pour ${DOMAIN} (renouvellement géré par certbot.timer)"
+        else
+            step "Émission du certificat TLS Let's Encrypt pour ${DOMAIN}"
+            if getent hosts "$DOMAIN" >/dev/null 2>&1; then
+                if certbot --nginx \
+                    --non-interactive --agree-tos --redirect \
+                    -m "$EMAIL" -d "$DOMAIN"; then
+                    ok "Certificat émis et bloc HTTPS configuré par Certbot"
+                else
+                    warn "Certbot a échoué — l'application reste accessible en HTTP. Relancez plus tard :"
+                    info "  sudo certbot --nginx -d $DOMAIN --redirect -m $EMAIL --agree-tos"
+                fi
+            else
+                warn "Le domaine ${DOMAIN} ne résout pas encore — émission Let's Encrypt sautée."
+                info "Une fois le DNS propagé, lancez :"
+                info "  sudo certbot --nginx -d $DOMAIN --redirect -m $EMAIL --agree-tos"
+            fi
+        fi
+    else
+        info "SKIP_TLS=1 : aucune émission de certificat (le TLS amont est probablement géré ailleurs)"
     fi
 fi
 
@@ -356,7 +382,8 @@ cat <<EOF
     docker compose logs -f app     # logs applicatifs en direct
     docker compose restart app     # redémarrage app
     docker compose down            # arrêt complet
-    sudo systemctl reload caddy    # recharger le reverse-proxy
+    sudo nginx -t && sudo systemctl reload nginx   # recharger le reverse-proxy
+    sudo certbot renew --dry-run                   # tester le renouvellement TLS
 
   ${DIM}Sauvegarde MongoDB${NC}
     docker compose exec mongo mongodump --db vitae_publica \\
@@ -370,7 +397,7 @@ fi
 
 # Avertissement DNS si on n'arrive pas à résoudre le domaine
 if ! getent hosts "${DOMAIN}" >/dev/null 2>&1; then
-    warn "Le domaine ${DOMAIN} ne résout pas encore. Caddy ne pourra obtenir le certificat TLS qu'une fois le DNS pointé vers ce serveur (enregistrement A/AAAA)."
+    warn "Le domaine ${DOMAIN} ne résout pas encore. Certbot ne pourra obtenir le certificat TLS qu'une fois le DNS pointé vers ce serveur (enregistrement A/AAAA)."
 fi
 
 exit 0
