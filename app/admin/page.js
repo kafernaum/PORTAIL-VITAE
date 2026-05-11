@@ -303,7 +303,7 @@ function VideosManager({ token }) {
 function LinksManager({ token }) {
   const [links, setLinks] = useState([])
   const [editing, setEditing] = useState(null)
-  const blank = { label: '', url: '', icon: 'ExternalLink', order: 1 }
+  const blank = { label: '', url: '', icon: 'ExternalLink', imageUrl: '', description: '', order: 1 }
   const [form, setForm] = useState(blank)
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
 
@@ -330,7 +330,17 @@ function LinksManager({ token }) {
     if (!confirm('Supprimer ce lien ?')) return
     try { await api(`links/${id}`, { method: 'DELETE' }, token); toast.success('Supprimé'); load() } catch (e) { toast.error(e.message) }
   }
-  function edit(l) { setEditing(l.id); setForm({ label: l.label, url: l.url, icon: l.icon, order: l.order }) }
+  function edit(l) {
+    setEditing(l.id)
+    setForm({
+      label: l.label,
+      url: l.url,
+      icon: l.icon,
+      imageUrl: l.imageUrl || '',
+      description: l.description || '',
+      order: l.order,
+    })
+  }
 
   async function handleDragEnd(event) {
     const { active, over } = event
@@ -354,11 +364,21 @@ function LinksManager({ token }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{editing ? 'Modifier le lien' : 'Ajouter un lien'}</CardTitle>
-          <CardDescription>Nom de l'icône Lucide (ex: LineChart, BookOpen, Calculator, GraduationCap, Library, FileText)</CardDescription>
+          <CardDescription>Image affichée en haut de la carte (URL d'image, ex: capture d'écran du site). Icône Lucide en complément (ex: LineChart, BookOpen, Calculator).</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1"><Label>Label</Label><Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></div>
-          <div className="space-y-1"><Label>URL</Label><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://..." /></div>
+          <div className="space-y-1"><Label>URL de destination</Label><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://..." /></div>
+          <div className="space-y-1">
+            <Label>Image (URL d'aperçu du site)</Label>
+            <Input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..../screenshot.png" />
+            {form.imageUrl && (
+              <div className="overflow-hidden rounded-md border border-border">
+                <img src={form.imageUrl} alt="Aperçu" className="aspect-video w-full object-cover" />
+              </div>
+            )}
+          </div>
+          <div className="space-y-1"><Label>Description (optionnelle, affichée sous le label)</Label><Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brève description du site / outil…" /></div>
           <div className="space-y-1"><Label>Icône (Lucide)</Label><Input value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} /></div>
           <div className="space-y-1"><Label>Ordre</Label><Input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} /></div>
           <div className="flex gap-2 pt-2">

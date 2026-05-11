@@ -308,18 +308,42 @@ export default function HomePage() {
                   href={l.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group relative flex flex-col justify-between rounded-lg border border-border bg-card p-6 transition hover:border-primary/50 hover:shadow-md"
+                  className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-card transition hover:border-primary/50 hover:shadow-md"
                 >
-                  <div>
-                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <Icon className="h-5 w-5" />
+                  {/* Image / illustration top */}
+                  <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-background">
+                    {l.imageUrl ? (
+                      <img
+                        src={l.imageUrl}
+                        alt={l.label}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                          <Icon className="h-7 w-7" />
+                        </div>
+                      </div>
+                    )}
+                    <ExternalLink className="absolute right-3 top-3 h-4 w-4 rounded-md bg-background/80 p-0.5 text-muted-foreground backdrop-blur" />
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex flex-1 flex-col p-5">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 shrink-0 text-primary" />
+                      <div className="text-base font-semibold leading-snug">{l.label}</div>
                     </div>
-                    <div className="text-base font-semibold leading-snug">{l.label}</div>
+                    {l.description && (
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground line-clamp-3">
+                        {l.description}
+                      </p>
+                    )}
+                    <div className="mt-auto flex items-center gap-1 pt-4 text-sm font-medium text-primary opacity-0 transition group-hover:opacity-100">
+                      Ouvrir <ArrowRight className="h-3.5 w-3.5" />
+                    </div>
                   </div>
-                  <div className="mt-6 flex items-center gap-1 text-sm font-medium text-primary opacity-0 transition group-hover:opacity-100">
-                    Ouvrir <ArrowRight className="h-3.5 w-3.5" />
-                  </div>
-                  <ExternalLink className="absolute right-4 top-4 h-4 w-4 text-muted-foreground/60" />
                 </a>
               )
             })}

@@ -180,6 +180,8 @@ export async function POST(request, { params }) {
         label: body.label || 'Lien',
         url: body.url || '#',
         icon: body.icon || 'ExternalLink',
+        imageUrl: body.imageUrl || '',
+        description: body.description || '',
         order: typeof body.order === 'number' ? body.order : 999,
       }
       await db.collection('links').insertOne(doc)
@@ -232,7 +234,7 @@ export async function PUT(request, { params }) {
     if (ml) {
       const id = ml[1]
       const update = {}
-      ;['label', 'url', 'icon', 'order'].forEach((k) => {
+      ;['label', 'url', 'icon', 'imageUrl', 'description', 'order'].forEach((k) => {
         if (body[k] !== undefined) update[k] = body[k]
       })
       await db.collection('links').updateOne({ id }, { $set: update })
