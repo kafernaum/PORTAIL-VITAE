@@ -165,6 +165,38 @@ Programmez un `cron` quotidien pour automatiser.
 
 ## Mise à jour de l'application
 
+### Upgrade applicatif (recommandé) — script dédié
+
+Si l'environnement est déjà en place (Docker, Caddy, UFW configurés par `install.sh`), utilisez `upgrade.sh` qui **ne réinstalle rien** et se contente d'appliquer les améliorations applicatives :
+
+```bash
+cd /opt/portail-vitae
+sudo git pull            # ou rsync depuis votre poste
+sudo bash deploy/upgrade.sh
+```
+
+Ce script :
+
+- Vérifie que Docker/Compose sont présents (mais ne les installe pas),
+- Sauvegarde `Dockerfile` et `docker-compose.yml` en `.bak.<timestamp>` avant toute modif,
+- Synchronise le nouveau code (git pull ou rsync depuis un clone local) en **préservant `.env` et `/data/`** (vos fichiers utilisateurs),
+- Ajoute `UPLOAD_DIR=/app/data/uploads` dans `.env` si manquant,
+- Rebuild l'image Docker (avec `ffmpeg` ajouté au `Dockerfile`),
+- Recrée **uniquement le conteneur `app`** (le service `mongo` et le volume `uploads_data` restent intacts),
+- Nettoie les anciennes images orphelines,
+- Vérifie : `/api/health` répond, `ffmpeg` est dans le conteneur, `POST /api/uploads/init` répond 401 sans auth, `DELETE /api/files/...` répond 401 sans auth,
+- Effectue un **test fonctionnel** : génère une mini-vidéo, l'uploade, vérifie le thumbnail, nettoie.
+
+Variables reconnues :
+- `INSTALL_DIR` (défaut `/opt/portail-vitae`)
+- `REPO_URL` (défaut : copie locale depuis le dossier du script)
+- `SKIP_REBUILD=1` pour ne pas rebuild l'image
+- `SKIP_HEALTH=1` pour sauter les vérifications
+
+En cas de souci, le script indique la commande exacte de **rollback** (restauration des `.bak` + recréation du conteneur).
+
+### Upgrade complet (réinstallation totale)
+
 ```bash
 cd /opt/portail-vitae
 sudo git pull
