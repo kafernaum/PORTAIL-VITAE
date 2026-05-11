@@ -1,10 +1,10 @@
-# Caddy reverse-proxy configuration for portail.vitea-publica.tech
+# Caddy reverse-proxy configuration for portail.vitae-publica.tech
 # Place this in /etc/caddy/Caddyfile (or include it from your main Caddyfile)
 #
 # Caddy will automatically provision a Let's Encrypt TLS certificate.
 # After editing: sudo systemctl reload caddy
 
-portail.vitea-publica.tech {
+portail.vitae-publica.tech {
     encode zstd gzip
 
     # Optional security headers
@@ -23,7 +23,7 @@ portail.vitea-publica.tech {
     }
 
     log {
-        output file /var/log/caddy/vitea-publica.log
+        output file /var/log/caddy/vitae-publica.log
         format console
     }
 }

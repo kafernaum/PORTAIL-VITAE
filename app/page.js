@@ -69,7 +69,7 @@ export default function HomePage() {
   const heroTitle = config?.heroTitle || 'Théorie Vitaliste des Finances Publiques'
   const heroSubtitle = config?.heroSubtitle || ''
   const introText = config?.introText || ''
-  const brandName = config?.brandName || 'Vitea Publica'
+  const brandName = config?.brandName || 'Vitae Publica'
   const brandTagline = config?.brandTagline || 'Portail Multimédia Institutionnel'
 
   return (
@@ -339,7 +339,7 @@ export default function HomePage() {
             © {new Date().getFullYear()} {brandName} — Portail institutionnel.
           </div>
           <div className="text-xs uppercase tracking-widest text-muted-foreground">
-            portail.vitea-publica.tech
+            portail.vitae-publica.tech
           </div>
         </div>
       </footer>

@@ -22,8 +22,8 @@ async function ensureDefaults(db) {
       heroTitle: 'Théorie Vitaliste des Finances Publiques',
       heroSubtitle: "L'impôt comme transfert de temps de vie humain — un nouveau paradigme pour le droit public et la finance.",
       heroBackground: 'https://images.unsplash.com/photo-1664725391940-e596199671b9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwxfHxjbGFzc2ljYWwlMjBwaWxsYXJzfGVufDB8fHxibHVlfDE3Nzg1MDU1MTF8MA&ixlib=rb-4.1.0&q=85',
-      introText: "Le portail Vitea Publica fédère les recherches, les vidéos pédagogiques et les applications opérationnelles fondées sur le paradigme vitaliste : penser l'impôt, la dette publique et la dépense étatique comme des flux de temps de vie humain.",
-      brandName: 'Vitea Publica',
+      introText: "Le portail Vitae Publica fédère les recherches, les vidéos pédagogiques et les applications opérationnelles fondées sur le paradigme vitaliste : penser l'impôt, la dette publique et la dépense étatique comme des flux de temps de vie humain.",
+      brandName: 'Vitae Publica',
       brandTagline: 'Portail Multimédia Institutionnel',
       updatedAt: new Date().toISOString(),
     })
@@ -96,7 +96,7 @@ export async function GET(request, { params }) {
     const path = (params?.path || []).join('/')
 
     if (path === '' || path === 'health') {
-      return json({ ok: true, service: 'vitea-publica' })
+      return json({ ok: true, service: 'vitae-publica' })
     }
 
     if (path === 'config') {

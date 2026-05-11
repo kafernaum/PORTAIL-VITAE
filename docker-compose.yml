@@ -7,7 +7,7 @@ services:
     volumes:
       - mongo_data:/data/db
     networks:
-      - vitea_net
+      - vitae_net
     # No port exposed publicly. Accessed only from the app container.
     # Uncomment if you want host access:
     # ports:
@@ -15,7 +15,7 @@ services:
 
   app:
     build: .
-    image: vitea-publica:latest
+    image: vitae-publica:latest
     restart: unless-stopped
     depends_on:
       - mongo
@@ -23,18 +23,18 @@ services:
       - NODE_ENV=production
       - PORT=8006
       - MONGO_URL=mongodb://mongo:27017
-      - DB_NAME=vitea_publica
+      - DB_NAME=vitae_publica
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme-strong-password}
-      - NEXT_PUBLIC_BASE_URL=https://portail.vitea-publica.tech
+      - NEXT_PUBLIC_BASE_URL=https://portail.vitae-publica.tech
       - CORS_ORIGINS=*
     ports:
       - "127.0.0.1:8006:8006"   # only exposed on localhost, Caddy/Nginx will reverse-proxy
     networks:
-      - vitea_net
+      - vitae_net
 
 volumes:
   mongo_data:
 
 networks:
-  vitea_net:
+  vitae_net:
     driver: bridge

@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/sonner'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata = {
-  title: 'Vitea Publica — Portail Multimédia',
+  title: 'Vitae Publica — Portail Multimédia',
   description: "Portail institutionnel dédié à la Théorie Vitaliste des Finances Publiques : l'impôt comme transfert de temps de vie humain.",
 }
 

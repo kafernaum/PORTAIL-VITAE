@@ -91,7 +91,7 @@ export default function AdminPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Lock className="h-5 w-5" />
             </div>
-            <CardTitle>Administration Vitea Publica</CardTitle>
+            <CardTitle>Administration Vitae Publica</CardTitle>
             <CardDescription>Accès réservé. Saisissez le mot de passe administrateur.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -128,7 +128,7 @@ function Dashboard({ token, onLogout }) {
               <ArrowLeft className="h-4 w-4" /> Portail
             </Link>
             <span className="text-muted-foreground/40">|</span>
-            <div className="text-sm font-semibold">Administration Vitea Publica</div>
+            <div className="text-sm font-semibold">Administration Vitae Publica</div>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
