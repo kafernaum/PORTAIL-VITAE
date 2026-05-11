@@ -152,11 +152,11 @@ backend:
 
   - task: "API videos CRUD + reorder + category"
     implemented: true
-    working: false
+    working: true
     file: "app/api/[[...path]]/route.js"
-    stuck_count: 1
+    stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -164,14 +164,17 @@ backend:
         - working: false
           agent: "testing"
           comment: "❌ CRITICAL BUG: MongoDB _id field is exposed in POST /api/videos response. Example: {'id': 'b3ad6af7-bf10-47e3-aae8-75fddf819892', ..., '_id': '6a01df7a0c1469b2c96a881c'}. When insertOne() is called, MongoDB mutates the doc object by adding _id. The code returns this mutated object. FIX: After insertOne, either delete doc._id or fetch with projection {_id:0}. ✅ GET /api/videos works correctly (no _id, sorted by order, all fields present). ✅ PUT/DELETE work. ✅ POST /api/videos/reorder works and persists correctly."
+        - working: true
+          agent: "testing"
+          comment: "✅ VERIFIED FIX: POST /api/videos now correctly returns only UUID 'id' field without MongoDB '_id'. Tested with real data (title: 'Vidéo Test Théorie Vitaliste', category: 'Test Vitaliste'). Response structure validated: all required fields present (id, title, description, url, category, order, createdAt), no _id exposed. Fix implemented at line 151: delete doc._id after insertOne(). Cleanup successful."
 
   - task: "API links CRUD + reorder"
     implemented: true
-    working: false
+    working: true
     file: "app/api/[[...path]]/route.js"
-    stuck_count: 1
+    stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
@@ -179,6 +182,9 @@ backend:
         - working: false
           agent: "testing"
           comment: "❌ CRITICAL BUG: MongoDB _id field is exposed in POST /api/links response. Same issue as videos - insertOne() mutates doc object. Example: {'id': '3ab9c608-2687-473f-ac33-3d0202d8aaa2', ..., '_id': '6a01df7a0c1469b2c96a881d'}. FIX: After insertOne, delete doc._id or fetch with projection {_id:0}. ✅ GET /api/links works correctly (no _id, sorted by order, all fields present). ✅ PUT/DELETE work. ✅ POST /api/links/reorder works and persists correctly."
+        - working: true
+          agent: "testing"
+          comment: "✅ VERIFIED FIX: POST /api/links now correctly returns only UUID 'id' field without MongoDB '_id'. Tested with real data (label: 'Lien Test Vitea Publica', icon: 'TestIcon'). Response structure validated: all required fields present (id, label, url, icon, order), no _id exposed. Fix implemented at line 186: delete doc._id after insertOne(). Cleanup successful."
 
   - task: "Auth guard sur routes protégées"
     implemented: true
@@ -223,13 +229,11 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "API videos CRUD + reorder + category"
-    - "API links CRUD + reorder"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -239,3 +243,5 @@ agent_communication:
       message: "Backend Vitea Publica prêt à tester. Stack: Next.js 14 App Router + MongoDB. Endpoints sous /api/*. Mot de passe admin: vitea2025 (env ADMIN_PASSWORD). Seed auto au premier GET /api/health: 5 vidéos (avec category) + 4 liens + 1 config. Tester: 1) tous les GET publics retournent 200 et structures attendues; 2) POST /api/auth/login avec bon/mauvais mot de passe; 3) auth guard (POST/PUT/DELETE sans token = 401); 4) CRUD complet videos & links (création/modification/suppression); 5) endpoints /api/videos/reorder et /api/links/reorder mettent à jour les orders en bulk; 6) PUT /api/config met à jour les champs; 7) tous les IDs sont des UUID, aucun ObjectId Mongo exposé."
     - agent: "testing"
       message: "Backend testing completed. Test results: 18/22 tests passed. ✅ WORKING: Health endpoint, auth/login, config GET/PUT, auth guards, videos/links GET (no _id exposed), videos/links reorder, PUT/DELETE operations. ❌ CRITICAL BUG FOUND: MongoDB _id field is exposed in POST responses for both /api/videos and /api/links. Root cause: insertOne() mutates the doc object by adding _id, then code returns the mutated object. FIX REQUIRED: In POST handlers for videos (line 150) and links (line 184), after insertOne(doc), either: 1) delete doc._id before returning, or 2) fetch the document back with projection {_id:0}. All other functionality working correctly."
+    - agent: "testing"
+      message: "✅ RE-TEST COMPLETE: Verified fix for MongoDB _id exposure bug. Both POST /api/videos and POST /api/links now correctly return only UUID 'id' field without MongoDB '_id'. Tests passed: 2/2. Fix confirmed at lines 151 and 186 (delete doc._id after insertOne). All backend endpoints now working correctly. Backend testing complete - all critical functionality verified."

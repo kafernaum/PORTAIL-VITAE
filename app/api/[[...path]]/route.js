@@ -148,6 +148,7 @@ export async function POST(request, { params }) {
         createdAt: new Date().toISOString(),
       }
       await db.collection('videos').insertOne(doc)
+      delete doc._id
       return json(doc)
     }
 
@@ -182,6 +183,7 @@ export async function POST(request, { params }) {
         order: typeof body.order === 'number' ? body.order : 999,
       }
       await db.collection('links').insertOne(doc)
+      delete doc._id
       return json(doc)
     }
 
